@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>WebGL Bump Mapping</title>
+  <style>
+    canvas { display: block; }
+    #controls { position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(255,255,255,0.8); padding: 8px; border-radius: 5px; }
+  </style>
+</head>
+<body>
+<div id="controls">
+  <label><input type="checkbox" id="bumpToggle" checked> Enable Bump Mapping</label>
+</div>
+<canvas id="glCanvas" width="400px" height="400px"></canvas>
+<script type="module">
+  import { mat4 } from 'https://cdn.jsdelivr.net/npm/gl-matrix@3.4.3/esm/index.js';
+  import { mat3 } from 'https://cdn.jsdelivr.net/npm/gl-matrix@3.4.3/esm/index.js';
+  // Import modular code
+  import { initShaders } from './js/shaderUtils.js';
+  import { createSphere } from './js/geometry.js';
+  import { loadTexture } from './js/textureUtils.js';
+
+  const canvas = document.getElementById('glCanvas');
+  const gl = canvas.getContext('webgl2');
+  if (!gl) throw new Error("WebGL not supported");
+
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+
+  const vertexShaderSrc = `
+attribute vec3 aPosition;
+attribute vec3 aNormal;
+attribute vec2 aTexCoord;
+attribute vec3 aTangent;
+
+uniform mat4 uModelViewMatrix;
+uniform mat4 uProjectionMatrix;
+uniform mat3 uNormalMatrix;
+
+varying vec2 vTexCoord;
+varying vec3 vFragPos;
+varying mat3 TBN;
+
+void main() {
+  vec3 T = normalize(uNormalMatrix * aTangent);
+  vec3 N = normalize(uNormalMatrix * aNormal);
+  vec3 B = cross(N, T);
+  TBN = mat3(T, B, N);
+  vTexCoord = aTexCoord;
+  vec4 worldPos = uModelViewMatrix * vec4(aPosition, 1.0);
+  vFragPos = worldPos.xyz;
+  gl_Position = uProjectionMatrix * worldPos;
+}`;
+
+  const fragmentShaderSrc = `
+precision mediump float;
+
+uniform sampler2D uDiffuseMap;
+uniform sampler2D uNormalMap;
+uniform vec3 uLightPos;
+uniform bool uUseBump;
+
+varying vec2 vTexCoord;
+varying vec3 vFragPos;
+varying mat3 TBN;
+
+void main() {
+  vec3 normal;
+  if (uUseBump) {
+    normal = texture2D(uNormalMap, vTexCoord).rgb;
+    normal = normalize(normal * 2.0 - 1.0);
+    normal = normalize(TBN * normal);
+  } else {
+    normal = normalize(TBN[2]); // Use interpolated normal
+  }
+
+  vec3 lightDir = normalize(uLightPos - vFragPos);
+  float diff = max(dot(normal, lightDir), 0.0);
+
+  vec3 diffuse = diff * texture2D(uDiffuseMap, vTexCoord).rgb;
+  //gl_FragColor = vec4(diff, 1.0);
+  gl_FragColor = vec4(diffuse, 1.0);
+}`;
+
+  const program = initShaders(gl, vertexShaderSrc, fragmentShaderSrc);
+  gl.useProgram(program);
+
+  // const posLoc = gl.getAttribLocation(program, 'aPosition');
+  // const normalLoc = gl.getAttribLocation(program, 'aNormal');
+  // const texLoc = gl.getAttribLocation(program, 'aTexCoord');
+  // const tangentLoc = gl.getAttribLocation(program, 'aTangent');
+
+
+  const { vao, vertexCount } = createSphere(gl, 1, 30, 30, program);
+
+  const modelViewMatrix = mat4.create();
+  const projectionMatrix = mat4.create();
+  const normalMatrix = mat3.create();
+  mat4.perspective(projectionMatrix, Math.PI/4, canvas.width/canvas.height, 0.1, 100.0);
+  mat4.lookAt(modelViewMatrix, [0,0,5], [0,0,0], [0,1,0]);
+  mat3.normalFromMat4(normalMatrix, modelViewMatrix);
+
+  const uModelViewMatrix = gl.getUniformLocation(program, 'uModelViewMatrix');
+  const uProjectionMatrix = gl.getUniformLocation(program, 'uProjectionMatrix');
+  const uNormalMatrix = gl.getUniformLocation(program, 'uNormalMatrix');
+  const uLightPos = gl.getUniformLocation(program, 'uLightPos');
+  const uUseBump = gl.getUniformLocation(program, 'uUseBump');
+
+  const diffuseTexture = await loadTexture(gl, '5984-v5.jpg');
+  const normalTexture = await loadTexture(gl, '5984-v5_normal.png');
+
+  const bumpToggle = document.getElementById('bumpToggle');
+
+  function draw() {
+    gl.clearColor(0.1, 0.1, 0.1, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST);
+
+    gl.uniformMatrix4fv(uModelViewMatrix, false, modelViewMatrix);
+    gl.uniformMatrix4fv(uProjectionMatrix, false, projectionMatrix);
+    gl.uniformMatrix3fv(uNormalMatrix, false, normalMatrix);
+    gl.uniform3f(uLightPos, 2.0, 2.0, 2.0);
+    gl.uniform1i(uUseBump, bumpToggle.checked ? 1 : 0);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, diffuseTexture);
+    gl.uniform1i(gl.getUniformLocation(program, 'uDiffuseMap'), 0);
+
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, normalTexture);
+    gl.uniform1i(gl.getUniformLocation(program, 'uNormalMap'), 1);
+
+    gl.bindVertexArray(vao);
+    gl.drawElements(gl.TRIANGLES, vertexCount, gl.UNSIGNED_SHORT, 0);
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+</script>
+</body>
+</html>

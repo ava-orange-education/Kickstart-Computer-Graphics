@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spinning Sphere</title>
+
+    <script src="shaderUtils.js" type="module" defer></script>
+    <script src="geometry.js" type="module" defer></script>
+    <script type="module" src="main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gl-matrix@2.8.1/dist/gl-matrix-min.js"></script>
+</head>
+<body>
+<canvas id="glCanvas" width="800" height="600"></canvas>
+<h1 style="font-family: 'Avenir Next'">Shading Type</h1>
+<p style="font-family: 'Avenir Next'">Flat Shading <input id="flat_radio" type="radio" name="myRadios" checked="true" value="flat"></input></p>
+<p style="font-family: 'Avenir Next'">Goraud (Per-Vertex) Shading<input id="goraud_radio" type="radio" name="myRadios" value="Per-Vertex" /></p>
+<p style="font-family: 'Avenir Next'">Phong (Per-Fragment) Shading<input id="phong_radio" type="radio" name="myRadios" value="Per-Fragment" /></p>
+
+</body>
+</html>

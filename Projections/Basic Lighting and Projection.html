@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WebGL Example: Cube, Sphere, Cone</title>
+  <style>
+    canvas { width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+<canvas id="glcanvas" width="640" height="480"></canvas>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
+<script>
+  const canvas = document.getElementById('glcanvas');
+  const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+
+  if (!gl) {
+    alert('Unable to initialize WebGL. Your browser may not support it.');
+    return;
+  }
+
+  const vsSource = `
+        attribute vec4 aVertexPosition;
+        attribute vec4 aVertexColor;
+        uniform mat4 uModelViewMatrix;
+        uniform mat4 uProjectionMatrix;
+        varying lowp vec4 vColor;
+        void main(void) {
+            gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+            vColor = aVertexColor;
+        }
+    `;
+
+  const fsSource = `
+        varying lowp vec4 vColor;
+        void main(void) {
+            gl_FragColor = vColor;
+        }
+    `;
+
+  function initShaderProgram(gl, vsSource, fsSource) {
+    const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
+    const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+
+    const shaderProgram = gl.createProgram();
+    gl.attachShader(shaderProgram, vertexShader);
+    gl.attachShader(shaderProgram, fragmentShader);
+    gl.linkProgram(shaderProgram);
+
+    if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+      alert('Unable to initialize the shader program: ' + gl.getProgramInfoLog(shaderProgram));
+      return null;
+    }
+
+    return shaderProgram;
+  }
+
+  function loadShader(gl, type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      alert('An error occurred compiling the shaders: ' + gl.getShaderInfoLog(shader));
+      gl.deleteShader(shader);
+      return null;
+    }
+
+    return shader;
+  }
+
+  const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
+
+  const programInfo = {
+    program: shaderProgram,
+    attribLocations: {
+      vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
+      vertexColor: gl.getAttribLocation(shaderProgram, 'aVertexColor'),
+    },
+    uniformLocations: {
+      projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'),
+      modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
+    },
+  };
+
+  const buffers = initBuffers(gl);
+
+  function initBuffers(gl) {
+    const cubeVertices = [
+      -1.0, -1.0,  1.0,
+      1.0, -1.0,  1.0,
+      1.0,  1.0,  1.0,
+      -1.0,  1.0,  1.0,
+      -1.0, -1.0, -1.0,
+      -1.0,  1.0, -1.0,
+      1.0,  1.0, -1.0,
+      1.0, -1.0, -1.0,
+    ];
+
+    const cubeIndices = [
+      0,  1,  2,      0,  2,  3,
+      4,  5,  6,      4,  6,  7,
+      5,  3,  2,      5,  2,  6,
+      4,  7,  1,      4,  1,  0,
+      7,  6,  2,      7,  2,  1,
+      4,  0,  3,      4,  3,  5
+    ];
+
+    const cubeColors = [];
+    for (let i = 0; i < 24; i++) {
+      cubeColors.push(1.0, 0.0, 0.0, 1.0);
+    }
+
+    const sphereData = createSphere();
+    const coneData = createCone();
+
+    const positions = cubeVertices.concat(sphereData.positions, coneData.positions);
+    const indices = cubeIndices.concat(sphereData.indices, coneData.indices.map(index => index + cubeVertices.length / 3));
+    const colors = cubeColors.concat(sphereData.colors, coneData.colors);
+
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+    const colorBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+
+    const indexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
+    return {
+      position: positionBuffer,
+      color: colorBuffer,
+      indices: indexBuffer,
+    };
+  }
+
+  function createSphere() {
+    const latitudeBands = 30;
+    const longitudeBands = 30;
+    const radius = 1;
+
+    const positions = [];
+    const indices = [];
+    const colors = [];
+
+    for (let latNumber = 0; latNumber <= latitudeBands; latNumber++) {
+      const theta = latNumber * Math.PI / latitudeBands;
+      const sinTheta = Math.sin(theta);
+      const cosTheta = Math.cos(theta);
+
+      for (let longNumber = 0; longNumber <= longitudeBands; longNumber++) {
+        const phi = longNumber * 2 * Math.PI / longitudeBands;
+        const sinPhi = Math.sin(phi);
+        const cosPhi = Math.cos(phi);
+
+        const x = cosPhi * sinTheta;
+        const y = cosTheta;
+        const z = sinPhi * sinTheta;
+        const u = 1 - (longNumber / longitudeBands);
+        const v = 1 - (latNumber / latitudeBands);
+
+        positions.push(radius * x, radius * y, radius * z);
+        colors.push(0.0, 1.0, 0.0, 1.0);
+      }
+    }
+
+    for (let latNumber = 0; latNumber < latitudeBands; latNumber++) {
+      for (let longNumber = 0; longNumber < longitudeBands; longNumber++) {
+        const first = (latNumber * (longitudeBands + 1)) + longNumber;
+        const second = first + longitudeBands + 1;
+
+        indices.push(first, second, first + 1);
+        indices.push(second, second + 1, first + 1);
+      }
+    }
+
+    return {
+      positions: positions,
+      indices: indices,
+      colors: colors
+    };
+  }
+
+  function createCone() {
+    const radius = 1;
+    const height = 2;
+    const segments = 30;
+
+    const positions = [];
+    const indices = [];
+    const colors = [];
+
+    for (let i = 0; i < segments; i++) {
+      const angle = i * 2 * Math.PI / segments;
+      const nextAngle = (i + 1) * 2 * Math.PI / segments;
+
+      positions.push(0, height, 0);
+      positions.push(radius * Math.cos(angle), 0, radius * Math.sin(angle));
+      positions.push(radius * Math.cos(nextAngle), 0, radius * Math.sin(nextAngle));
+
+      colors.push(0.0, 0.0, 1.0, 1.0);
+      colors.push(0.0, 0.0, 1.0, 1.0);
+      colors.push(0.0, 0.0, 1.0, 1.0);
+
+      const baseIndex = i * 3;
+      indices.push(baseIndex, baseIndex + 1, baseIndex + 2);
+    }
+
+    return {
+      positions: positions,
+      indices: indices,
+      colors: colors
+    };
+  }
+
+  function drawScene(gl, programInfo, buffers) {
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.clearDepth(1.0);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LEQUAL);
+
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    const projectionMatrix = mat4.create();
+    mat4.ortho(projectionMatrix, -5, 5, -5, 5, 0.1, 100.0);
+
+    const modelViewMatrix = mat4.create();
+    mat4.lookAt(modelViewMatrix, [0.0, 10.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, -1.0]);
+
+    {
+      const numComponents = 3;
+      const type = gl.FLOAT;
+      const normalize = false;
+      const stride = 0;
+      const offset = 0;
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
+      gl.vertexAttribPointer(
+        programInfo.attribLocations.vertexPosition,
+        numComponents,
+        type,
+        normalize,
+        stride,
+        offset);
+      gl.enableVertexAttribArray(
+        programInfo.attribLocations.vertexPosition);
+    }
+
+    {
+      const numComponents = 4;
+      const type = gl.FLOAT;
+      const normalize = false;
+      const stride = 0;
+      const offset = 0;
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffers.color);
+      gl.vertexAttribPointer(
+        programInfo.attribLocations.vertexColor,
+        numComponents,
+        type,
+        normalize,
+        stride,
+        offset);
+      gl.enableVertexAttribArray(
+        programInfo.attribLocations.vertexColor);
+    }
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
+
+    gl.useProgram(programInfo.program);
+
+    gl.uniformMatrix4fv(
+      programInfo.uniformLocations.projectionMatrix,
+      false,
+      projectionMatrix);
+    gl.uniformMatrix4fv(
+      programInfo.uniformLocations.modelViewMatrix,
+      false,
+      modelViewMatrix);
+
+    {
+      const vertexCount = buffers.indices.length;
+      const type = gl.UNSIGNED_SHORT;
+      const offset = 0;
+      gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
+    }
+  }
+
+  drawScene(gl, programInfo, buffers);
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="author" content="Aditya Shekhar Nittala"/>
+  <meta name="description" content="WebGL Sphere"/>
+  <title>WebGL Sphere With UI Controls</title>
+  <style>
+    body { margin: 0; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<canvas id="webglCanvas" width="500" height="500"></canvas>
+<h3>Segments</h3>
+<input id="segment_slider" type="range" step="1" min="1" max="30" value="20" onchange="sphereRenderer()">
+
+<h3>Radius</h3>
+<input id="radius_slider" type="range" step="0.1" min="0" max="5" value="0.5" onchange="sphereRenderer()">
+
+<script src="js/webglSphere.js"></script>
+</body>
+</html>
